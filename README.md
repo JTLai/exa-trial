@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Prototype Starter
 
-## Getting Started
+A minimal, reliable starter for building small AI-powered web apps fast — designed for time-boxed settings like a two-hour product or coding interview.
 
-First, run the development server:
+**Stack:** Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Vercel AI SDK (OpenAI) · Zod · SQLite (better-sqlite3) · Drizzle ORM · npm
+
+**Sample feature:** a Text Analyzer. Paste text → a server-side OpenAI call returns a structured `{ summary, sentiment, topics }` object (validated with Zod) → the result is stored in SQLite and rendered in the UI with loading and error states. It exists to demonstrate the full loop and is intentionally easy to delete.
+
+## Quick start
+
+```bash
+npm install
+cp .env.example .env.local   # then paste your OpenAI API key
+npm run db:push              # creates local.db with the schema
+npm run dev                  # http://localhost:3000
+```
+
+## Setup on a new machine
+
+### 1. Prerequisites
+
+- **Node.js 20.9+** (any recent LTS or newer; check with `node --version`)
+- **npm 10+** (ships with Node)
+- An **OpenAI API key** — create one at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+
+Nothing else. SQLite is embedded via `better-sqlite3` (a prebuilt native module — no separate database install, no Docker).
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+The lockfile (`package-lock.json`) is committed, so installs are reproducible.
+
+> If your npm is configured to block install scripts, allow them for `better-sqlite3`, `sharp`, `esbuild`, and `unrs-resolver` (e.g. `npm approve-scripts`) — `better-sqlite3` needs its script to fetch the prebuilt native binding.
+
+### 3. Configure the API key
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` and set `OPENAI_API_KEY`. Optional variables:
+
+- `AI_MODEL` — OpenAI model ID (default `gpt-5.1`)
+- `DATABASE_PATH` — SQLite file location (default `local.db` in the project root)
+
+`.env.local` is gitignored; the key is only ever read on the server.
+
+### 4. Initialize SQLite
+
+```bash
+npm run db:push
+```
+
+This creates `local.db` (gitignored) and syncs it to the schema in `lib/db/schema.ts`. Re-run it any time you change the schema. `npm run db:studio` opens a browser UI to inspect the data.
+
+### 5. Start the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000, paste some text, and click **Analyze** to verify the full loop (UI → API route → OpenAI → Zod validation → SQLite → UI).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 6. Validation and production build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint        # ESLint
+npm run typecheck   # tsc --noEmit
+npm run test        # Vitest (schema + DB round-trip tests, no API key needed)
+npm run build       # production build
+npm run start       # serve the production build
+```
 
-## Learn More
+## Project layout
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  page.tsx                  # sample UI (form, loading, error, results)
+  layout.tsx                # root layout
+  api/analyses/route.ts     # sample API route: GET list, POST analyze+store
+lib/
+  ai.ts                     # model setup + analyzeText() — ALL LLM calls live here
+  db/
+    schema.ts               # Drizzle table definitions
+    index.ts                # SQLite connection + Drizzle client
+components/ui/              # shadcn/ui components (add more: npx shadcn add <name>)
+tests/                      # Vitest tests
+drizzle.config.ts           # Drizzle Kit config (db:push / db:studio)
+.env.example                # environment template
+AGENTS.md / CLAUDE.md       # guidance for AI coding agents
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Concern  | File |
+|----------|------|
+| Frontend | `app/page.tsx` |
+| AI calls | `lib/ai.ts` |
+| Zod schemas | `lib/ai.ts` (LLM output), `app/api/analyses/route.ts` (request body) |
+| API | `app/api/analyses/route.ts` |
+| Database | `lib/db/schema.ts`, `lib/db/index.ts` |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Replacing the sample feature during an interview
 
-## Deploy on Vercel
+The Text Analyzer is a template for the pattern *submit → LLM → validate → store → display*. To build your own feature:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Schema** — replace the `analyses` table in `lib/db/schema.ts` with your table(s), then `npm run db:push`. (If the old table shape conflicts, just delete `local.db` and push again — it's throwaway data.)
+2. **AI** — in `lib/ai.ts`, replace `analysisSchema` and `analyzeText()` with your Zod schema and a `generateObject` (or `generateText` / `streamText`) call. Keep all LLM calls in this file.
+3. **API** — rename/replace `app/api/analyses/route.ts`. The existing route shows the shape: validate the request body with Zod → call the AI helper → write with Drizzle → return JSON with proper status codes.
+4. **UI** — rewrite `app/page.tsx`. Reuse the existing loading/error/list patterns and the shadcn components in `components/ui/`.
+5. **Tests** — update `tests/` to cover your new Zod schema and table.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Delete freely — nothing outside those files depends on the sample.
+
+## Troubleshooting
+
+- **`Could not load past analyses` in the UI / `no such table: analyses`** — you haven't run `npm run db:push` yet.
+- **500 "Analysis failed" on submit** — usually a missing/invalid `OPENAI_API_KEY` in `.env.local`. Check the terminal running `npm run dev` for the underlying error. Restart the dev server after editing env files.
+- **`better-sqlite3` errors on install or import** (e.g. `Could not locate the bindings file`) — the native module didn't build. Run `npm rebuild better-sqlite3`; make sure install scripts weren't blocked (see step 2).
+- **Node version errors from Next.js** — upgrade Node to 20.9+ (`node --version`).
+- **Schema change not reflected** — run `npm run db:push` again; for destructive changes on throwaway data, delete `local.db*` and push.
+- **Port 3000 in use** — `npm run dev -- -p 3001`.
+
+## Deliberate non-goals
+
+No auth, no Docker, no Postgres, no agent frameworks, no workflow orchestration, no tracing platforms. Add them only if your project actually needs them.
