@@ -13,7 +13,7 @@ A minimal Next.js starter for building small AI-powered apps quickly (e.g. durin
 - **Keep it simple.** No new abstractions, layers, or dependencies unless the task truly needs them. Prefer editing the existing files over creating parallel structures.
 - **Keep it reliable.** Everything runs locally: SQLite file database, no Docker, no external services beyond the OpenAI API. Don't introduce infrastructure.
 - **Server-side LLM calls only.** All AI calls go through `lib/ai.ts`; the API key never reaches the client.
-- **Validate LLM output with Zod.** Use `generateObject` with a Zod schema (see `lib/ai.ts`) so responses are typed and validated.
+- **Validate LLM output with Zod.** Use `generateText` with `output: Output.object({ schema })` (see `lib/ai.ts`) so responses are typed and validated. `generateObject` is deprecated in AI SDK 7 — don't use it.
 
 ## Where things live
 

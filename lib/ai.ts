@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 
 // All LLM calls go through this module so swapping models or providers is a
@@ -22,11 +22,12 @@ export const analysisSchema = z.object({
 export type AnalysisResult = z.infer<typeof analysisSchema>;
 
 export async function analyzeText(input: string): Promise<AnalysisResult> {
-  const { object } = await generateObject({
+  const { output } = await generateText({
     model,
-    schema: analysisSchema,
+    output: Output.object({ schema: analysisSchema }),
     prompt: `Analyze the following text. Summarize it, classify its overall sentiment, and extract its main topics.\n\n<text>\n${input}\n</text>`,
   });
-  // generateObject already validated `object` against analysisSchema.
-  return object;
+  // `output` is already validated against analysisSchema; a mismatch throws
+  // NoObjectGeneratedError, which the API route turns into a 500.
+  return output;
 }
