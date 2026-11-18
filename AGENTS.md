@@ -20,15 +20,20 @@ A minimal Next.js starter for building small AI-powered apps quickly (e.g. durin
 - `lib/ai.ts` — model setup + all LLM calls (Vercel AI SDK, OpenAI provider)
 - `lib/db/schema.ts` — Drizzle table definitions (single source of truth for DB shape)
 - `lib/db/index.ts` — SQLite connection + Drizzle client
-- `app/api/analyses/route.ts` — example API route (GET list, POST create)
-- `app/page.tsx` — example UI (client component using shadcn/ui)
+- `lib/exa.ts` — Exa API wrapper (domain search, contents, deep-search fallback)
+- `lib/pricing.ts` — per SKU × retailer lookup pipeline + background runs
+- `lib/retailers.ts`, `lib/upc.ts` — retailer config, UPC/GTIN matching
+- `lib/insights.ts` — price index vs. cross-retailer median, CSV export
+- `data/skus.json` — tracked assortment (from the client's spreadsheet), seeded into SQLite on first load
+- `app/api/{prices,runs,history}/route.ts` — API routes
+- `app/page.tsx` — price matrix UI
 - `components/ui/` — shadcn/ui primitives (generated; add more with `npx shadcn add <name>`)
 
 ## Workflow
 
 - After changing `lib/db/schema.ts`, run `npm run db:push` (no migration files — push is fine for prototypes).
 - Before declaring work done, run: `npm run lint && npm run typecheck && npm run test && npm run build`.
-- The sample "Text Analyzer" feature (page + API route + `analyses` table + `analyzeText`) is disposable — replace it wholesale when building a new feature, reusing the same pattern.
+- Target hides prices from crawlers and bot-blocks headless browsers, so Target prices come from Exa deep search and are flagged third-party. Don't add CAPTCHA solving or stealth browsing.
 
 ## Git management
 - Do NOT create any commits automatically. Focus on making just the necessary code change and testing when applicable.

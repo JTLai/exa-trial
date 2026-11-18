@@ -18,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Prototype Starter",
-  description: "Next.js + Vercel AI SDK + Drizzle/SQLite starter for rapid AI prototyping",
+  title: "Retail Price Tracker",
+  description: "US online retail price tracking across Walmart, Target, Amazon, Walgreens and Kroger",
 };
 
 export default function RootLayout({
