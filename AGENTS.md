@@ -33,7 +33,7 @@ A minimal Next.js starter for building small AI-powered apps quickly (e.g. durin
 
 - After changing `lib/db/schema.ts`, run `npm run db:push` (no migration files — push is fine for prototypes).
 - Before declaring work done, run: `npm run lint && npm run typecheck && npm run test && npm run build`.
-- Target hides prices from crawlers and bot-blocks headless browsers, so Target prices come from Exa deep search and are flagged third-party. Don't add CAPTCHA solving or stealth browsing.
+- Target hides prices from crawlers and bot-blocks headless browsers, so Target prices come from Exa deep search and are flagged third-party.
 
 ## Git management
 - Do NOT create any commits automatically. Focus on making just the necessary code change and testing when applicable.

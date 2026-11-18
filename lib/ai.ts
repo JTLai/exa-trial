@@ -27,6 +27,16 @@ export const priceExtractionSchema = z.object({
     .positive()
     .nullable()
     .describe("Regular / strike-through price if the page shows the item on sale, else null"),
+  packOption: z
+    .object({
+      label: z.string().describe("The option label exactly as shown, e.g. 'Single', '1 Count', '2 Pack'"),
+      price: z.number().positive().describe("That option's one-time price in USD"),
+      regularPrice: z.number().positive().nullable().describe("That option's strike-through price, else null"),
+    })
+    .nullable()
+    .describe(
+      "When the matched page lists pack-size / count options with their own prices (e.g. 'Single $9.74', '2 Pack $18.99') and one option is the SKU's pack, that option. Else null.",
+    ),
   promo: z.string().nullable().describe("Short promo text if any (e.g. 'Rollback', 'BOGO 50%'), else null"),
   availability: z.enum(["in_stock", "out_of_stock", "unknown"]),
   confidence: z.enum(["high", "medium", "low"]),
@@ -75,8 +85,9 @@ SKU to find:
 Rules:
 - A candidate with upc_verified=YES is the right product even if its title wording differs; prefer it.
 - When several candidates match, prefer the listing sold by ${input.retailerName} itself over third-party marketplace sellers.
-- Otherwise match on brand, product line, size (fl oz / mL / ct) and pack count (e.g. "2 x" twin packs). If only a different size or pack is listed, use matchType "different_size".
-- Ignore search/category/review/Q&A pages, third-party marketplace bundles of multiple units, and "pack of N" listings unless the SKU is that pack.
+- Otherwise match on brand, product line, size (fl oz / mL / ct) and pack count (e.g. "2 x" twin packs). The size and pack MUST match for "exact". If only a different size or pack is listed (e.g. only a 2-pack of the same bottle), use matchType "different_size", still return that candidate's index, and return the price shown for that listing as-is. If the page does not show the size, do not assume it matches.
+- Ignore search/category/review/Q&A pages, and third-party marketplace bundles that mix different products.
+- Retailers (especially Walmart) often show one product page for several pack sizes, with a pack-size selector listing each option and its price (e.g. "Pack Size: 2 Pack", "Single $9.74", "2 Pack $18.99"). The page's "current price" is for whichever option is pre-selected. If an option matches the SKU's pack (e.g. "Single" for a single bottle), return it in packOption and use matchType "exact"; otherwise packOption is null.
 - Price is the price a shopper pays now for a one-time purchase. Ignore per-unit prices ("$x/fl oz"), subscribe & save, and prices of other products on the page.
 - If page text and structured data disagree, prefer the price shown in the page text and lower your confidence.
 - Never guess a price that isn't on the page. If the page doesn't show one, return price null.

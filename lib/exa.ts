@@ -35,6 +35,8 @@ export type ExaResult = {
   url: string;
   title: string;
   text: string;
+  /** Page date Exa reports (often the publish/modified date, not the crawl time). */
+  publishedDate: string | null;
   /** Structured product data Exa extracted from the page, when available. */
   product: {
     name: string | null;
@@ -56,6 +58,7 @@ function toResult(raw: z.infer<typeof resultSchema>): ExaResult {
     url: raw.url,
     title: raw.title ?? "",
     text: raw.text ?? "",
+    publishedDate: raw.publishedDate ?? null,
     product: p
       ? {
           name: p.name ?? null,
@@ -105,7 +108,8 @@ export async function searchDomain(query: string, domain: string, numResults = 1
   return { results: raw.results.map(toResult), costUsd: raw.costDollars?.total ?? 0 };
 }
 
-export async function getContents(urls: string[]): Promise<ExaResponse> {
+/** `maxAgeHours: 0` forces a live crawl; the default allows cached pages up to EXA_MAX_AGE_HOURS old. */
+export async function getContents(urls: string[], opts: { maxAgeHours?: number } = {}): Promise<ExaResponse> {
   const raw = z
     .object({
       results: z.array(resultSchema),
@@ -116,7 +120,7 @@ export async function getContents(urls: string[]): Promise<ExaResponse> {
       await exaPost("/contents", {
         urls,
         text: { maxCharacters: 4000 },
-        maxAgeHours,
+        maxAgeHours: opts.maxAgeHours ?? maxAgeHours,
       }),
     );
   return { results: raw.results.map(toResult), costUsd: raw.costDollars?.total ?? 0 };

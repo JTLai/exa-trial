@@ -39,6 +39,12 @@ export const observations = sqliteTable(
     confidence: text("confidence", { enum: ["high", "medium", "low"] }),
     /** retailer_page = read from the retailer's own product page; third_party = Exa deep search across other sources. */
     source: text("source", { enum: ["retailer_page", "third_party"] }),
+    /** Set when the retailer only sells a different pack: listing pack ÷ SKU pack. `price` is normalized by it. */
+    packRatio: real("pack_ratio"),
+    /** Pack-size option on the page whose price was used (e.g. "Single" on Walmart's 2-pack page). */
+    packOption: text("pack_option"),
+    /** The listing's own price before pack normalization. */
+    listedPrice: real("listed_price"),
     upcVerified: integer("upc_verified", { mode: "boolean" }).notNull().default(false),
     url: text("url"),
     productTitle: text("product_title"),

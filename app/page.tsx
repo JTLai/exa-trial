@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Observation, Run } from "@/lib/db/schema";
 import type { RetailerSummary, SkuRow } from "@/lib/insights";
 import { RETAILER_IDS, RETAILERS, type RetailerId } from "@/lib/retailers";
+import { packLabel } from "@/lib/size";
 
 type PricesResponse = { rows: SkuRow[]; retailers: RetailerSummary[]; activeRun: Run | null };
 
@@ -134,9 +135,10 @@ export default function Home() {
 
       <Legend />
 
-      <div className="overflow-x-auto rounded-lg border">
+      {/* Own scroll box (both axes) so the header can stick while the table also scrolls sideways on small screens. */}
+      <div className="max-h-[calc(100dvh-2rem)] overflow-auto rounded-lg border">
         <table className="w-full min-w-[1000px] text-sm">
-          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+          <thead className="sticky top-0 z-10 bg-muted text-left text-xs text-muted-foreground shadow-[0_1px_0_var(--border)]">
             <tr>
               <th className="w-8 p-2" />
               <th className="p-2 font-medium">SKU</th>
@@ -279,7 +281,8 @@ function Legend() {
       <span><span className="font-medium text-emerald-600">$0.00</span> lowest</span>
       <span><span className="font-medium text-rose-600">$0.00</span> highest</span>
       <span><Tag className="bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">3P</Tag> third-party source</span>
-      <span><Tag className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">≠size</Tag> only a different size listed (not compared)</span>
+      <span><span className="text-muted-foreground">no match</span> = UPC / exact size not found at that retailer</span>
+      <span><Tag className="bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300">pack ÷2</Tag> only a different pack sold; price normalized to this SKU</span>
       <span><Tag className="bg-muted text-muted-foreground">low</Tag> low confidence</span>
       <span><Tag className="bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">OOS</Tag> out of stock</span>
       <span>Spread = (max − min) / min across exact matches</span>
@@ -294,7 +297,7 @@ function Tag({ className, children }: { className: string; children: React.React
 function PriceCell({ o, row }: { o?: Observation; row: SkuRow }) {
   if (!o) return <span className="text-muted-foreground/50">—</span>;
   if (o.status === "error") return <span className="text-xs text-rose-600" title={o.notes ?? ""}>error</span>;
-  if (o.status === "not_listed") return <span className="text-xs text-muted-foreground" title={o.notes ?? ""}>not found</span>;
+  if (o.status === "not_listed") return <span className="text-xs text-muted-foreground" title={o.notes ?? ""}>no match</span>;
   if (o.status === "no_price" || o.price == null)
     return <span className="text-xs text-muted-foreground" title={o.notes ?? ""}>listed, no price</span>;
 
@@ -309,8 +312,12 @@ function PriceCell({ o, row }: { o?: Observation; row: SkuRow }) {
         <div className="text-[11px] text-muted-foreground line-through tabular-nums">{usd(o.regularPrice)}</div>
       )}
       <div>
+        {o.packRatio != null && (
+          <Tag className="bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300">
+            pack {packLabel(o.packRatio)}
+          </Tag>
+        )}
         {o.source === "third_party" && <Tag className="bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">3P</Tag>}
-        {o.matchType === "different_size" && <Tag className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">≠size</Tag>}
         {o.confidence === "low" && <Tag className="bg-muted text-muted-foreground">low</Tag>}
         {o.availability === "out_of_stock" && <Tag className="bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">OOS</Tag>}
       </div>
@@ -358,6 +365,9 @@ function SkuDetail({ row }: { row: SkuRow }) {
                   <dt className="text-muted-foreground">Confidence</dt><dd>{o.confidence ?? "—"}</dd>
                   <dt className="text-muted-foreground">Source</dt><dd>{o.source === "third_party" ? "third-party" : o.source === "retailer_page" ? "retailer page" : "—"}</dd>
                   <dt className="text-muted-foreground">Stock</dt><dd>{o.availability ?? "—"}</dd>
+                  {o.packRatio != null && o.listedPrice != null && (
+                    <><dt className="text-muted-foreground">Pack price</dt><dd>{usd(o.listedPrice)} {packLabel(o.packRatio)}</dd></>
+                  )}
                   {o.promo && (<><dt className="text-muted-foreground">Promo</dt><dd>{o.promo}</dd></>)}
                   <dt className="text-muted-foreground">Observed</dt><dd>{new Date(o.observedAt).toLocaleDateString()}</dd>
                 </dl>

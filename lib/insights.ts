@@ -1,5 +1,6 @@
 import type { Observation, Sku } from "./db/schema";
-import { RETAILER_IDS, type RetailerId } from "./retailers";
+import { RETAILER_IDS, RETAILERS, type RetailerId } from "./retailers";
+import { compareSize, packLabel, packRatio } from "./size";
 
 export type SkuRow = Sku & {
   prices: Partial<Record<RetailerId, Observation>>;
@@ -43,9 +44,54 @@ export function latestByKey(rows: Observation[]): Map<string, Partial<Record<Ret
   return map;
 }
 
+/**
+ * The size must match for a listing to be the same SKU. Re-applies that rule to
+ * stored observations (older runs saved size mismatches and unconfirmed
+ * third-party prices) so anything not confirmed as this exact SKU reads as no match.
+ * Same unit size in a different pack is normalized to one SKU and keeps its packRatio tag.
+ */
+export function enforceExactSku(o: Observation, sku: Sku): Observation {
+  if (o.status !== "priced" && o.status !== "no_price") return o;
+  // Already resolved to the SKU's pack when it was looked up (normalized, or priced from the page's pack option).
+  if (o.packRatio != null || o.packOption != null) return o;
+
+  const ratio = !o.upcVerified && o.source === "retailer_page" && o.productTitle ? packRatio(sku.title, o.productTitle) : null;
+  if (ratio != null) {
+    const normalize = (p: number | null) => (p != null ? Math.round((p / ratio) * 100) / 100 : p);
+    return {
+      ...o,
+      matchType: "exact",
+      packRatio: ratio,
+      listedPrice: o.price,
+      price: normalize(o.price),
+      regularPrice: normalize(o.regularPrice),
+      notes: `Only a different pack is listed ("${o.productTitle}"); price normalized ${packLabel(ratio)}.`,
+    };
+  }
+
+  let reason: string | null = null;
+  if (o.matchType !== "exact") reason = "only a different size/pack is listed";
+  else if (!o.upcVerified && o.productTitle && compareSize(sku.title, o.productTitle) === "conflict")
+    reason = `listing is a different size/pack ("${o.productTitle}")`;
+  else if (o.source === "third_party" && !o.url?.includes(RETAILERS[o.retailer as RetailerId]?.domain ?? "\0"))
+    reason = "not confirmed on the retailer's site";
+  if (!reason) return o;
+  return {
+    ...o,
+    status: "not_listed",
+    matchType: o.matchType === "exact" ? "different_size" : o.matchType,
+    price: null,
+    regularPrice: null,
+    promo: null,
+    notes: `No match: ${reason}.`,
+  };
+}
+
 export function buildRows(skuList: Sku[], latest: Map<string, Partial<Record<RetailerId, Observation>>>): SkuRow[] {
   return skuList.map((sku) => {
-    const prices = latest.get(sku.upc) ?? {};
+    const prices = Object.fromEntries(
+      Object.entries(latest.get(sku.upc) ?? {}).map(([r, o]) => [r, enforceExactSku(o, sku)]),
+    ) as Partial<Record<RetailerId, Observation>>;
     const values = RETAILER_IDS.map((r) => prices[r]).filter(isComparable).map((o) => o.price);
     return {
       ...sku,
@@ -90,11 +136,11 @@ const csvCell = (v: unknown) => {
 };
 
 export function toCsv(rows: SkuRow[]): string {
-  const header = ["UPC", "Title", "Brand", "Retailer", "Status", "Price", "Regular Price", "Promo", "Availability", "Match", "Confidence", "Source", "UPC Verified", "URL", "Observed At", "Notes"];
+  const header = ["UPC", "Title", "Brand", "Retailer", "Status", "Price", "Regular Price", "Promo", "Availability", "Match", "Confidence", "Source", "UPC Verified", "URL", "Observed At", "Notes", "Pack Normalized", "Listed Pack Price"];
   const lines = rows.flatMap((row) =>
     RETAILER_IDS.map((r) => {
       const o = row.prices[r];
-      return [row.upc, row.title, row.brand, r, o?.status ?? "not_checked", o?.price, o?.regularPrice, o?.promo, o?.availability, o?.matchType, o?.confidence, o?.source, o?.upcVerified, o?.url, o?.observedAt?.toISOString(), o?.notes]
+      return [row.upc, row.title, row.brand, r, o?.status ?? "not_checked", o?.price, o?.regularPrice, o?.promo, o?.availability, o?.matchType, o?.confidence, o?.source, o?.upcVerified, o?.url, o?.observedAt?.toISOString(), o?.notes, o?.packRatio != null ? packLabel(o.packRatio) : "", o?.listedPrice]
         .map(csvCell)
         .join(",");
     }),
