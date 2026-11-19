@@ -1,129 +1,108 @@
-# AI Prototype Starter
+# Grocery Price Tracker
 
-A minimal, reliable starter for building small AI-powered web apps fast — designed for time-boxed settings like a two-hour product or coding interview.
+Tracks online prices for a fixed assortment of grocery SKUs across five retailers — Walmart, Target, Amazon, Walgreens, Kroger — using [Exa](https://exa.ai) search + contents APIs, with OpenAI for price extraction. Built for comparing Exa-based retrieval against browser-automation scrapers.
 
 **Stack:** Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Vercel AI SDK (OpenAI) · Zod · SQLite (better-sqlite3) · Drizzle ORM · npm
 
-**Sample feature:** a Text Analyzer. Paste text → a server-side OpenAI call returns a structured `{ summary, sentiment, topics }` object (validated with Zod) → the result is stored in SQLite and rendered in the UI with loading and error states. It exists to demonstrate the full loop and is intentionally easy to delete.
+## What it does
+
+- **Price matrix (`/`)** — one row per SKU, one column per retailer. Shows price, promo, availability, and match quality (exact UPC vs. different pack size, with pack-ratio normalization). Per-retailer price index vs. the cross-retailer median. Expand a row for observation history; export to CSV.
+- **Refresh runs** — a run looks up every SKU × retailer in the background (~20 min, roughly $5 of Exa + OpenAI usage for the full matrix). Prices fill in live via polling.
+- **Eval (`/eval`)** — scores the latest Exa-based observation per cell against a hand-verified golden set (`data/golden-set.json`) on price accuracy and freshness.
+- **Browser-Use (`/browser-use`)** — re-tries the golden-set items Exa got wrong with two browser-automation tools (Browserless Smart Scrape, Firecrawl Interact) and scores them against the same golden prices.
 
 ## Quick start
 
 ```bash
 npm install
-cp .env.example .env.local   # then paste your OpenAI API key
+cp .env.example .env.local   # then fill in your keys
 npm run db:push              # creates local.db with the schema
 npm run dev                  # http://localhost:3000
 ```
 
-## Setup on a new machine
+The SKU list in `data/skus.json` is seeded into SQLite on first load.
+
+## Setup
 
 ### 1. Prerequisites
 
 - **Node.js 24 LTS** recommended (22.12+ minimum; check with `node --version`). An `.nvmrc` is included, so `nvm use` / `fnm use` picks the right version.
 - **npm 10+** (ships with Node)
-- An **OpenAI API key** — create one at [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
-Nothing else. SQLite is embedded via `better-sqlite3`, which ships prebuilt binaries for macOS, Linux, and Windows inside the package — no separate database install, no Docker, no compile step.
+SQLite is embedded via `better-sqlite3` (prebuilt binaries) — no Docker, no external database.
 
-### 2. Install dependencies
-
-```bash
-npm install
-```
-
-The lockfile (`package-lock.json`) is committed, so installs are reproducible.
-
-> Only `esbuild` and `unrs-resolver` need install scripts; they're pre-approved in `package.json` (`allowScripts`). If npm warns about `fsevents`, you can ignore it — it ships a prebuilt binary.
-
-### 3. Configure the API key
+### 2. Configure API keys
 
 ```bash
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and set `OPENAI_API_KEY`. Optional variables:
+| Variable | Required | Purpose |
+|---|---|---|
+| `OPENAI_API_KEY` | yes | LLM price extraction from retrieved page text |
+| `EXA_API_KEY` | yes | Domain search, contents, and deep-search fallback |
+| `BROWSERLESS_API_KEY` | Browser-Use tab | Browserless Smart Scrape |
+| `FIRECRAWL_API_KEY` | Browser-Use tab | Firecrawl Interact |
+
+Optional tuning variables:
 
 - `AI_MODEL` — OpenAI model ID (default `gpt-5.1`)
-- `DATABASE_PATH` — SQLite file location (default `local.db` in the project root)
-- `KROGER_CLIENT_ID`, `KROGER_CLIENT_SECRET` — free credentials from developer.kroger.com. When set, Kroger prices come from Kroger's Products API for one pinned store instead of from Exa (Kroger has no national price, and Exa's crawler lands on a store we can't choose).
-- `KROGER_LOCATION_ID` or `KROGER_ZIP` — the Kroger reference store (by ID, or the nearest Kroger to a zip). Required with the credentials above.
+- `DATABASE_PATH` — SQLite file location (default `local.db`)
+- `EXA_MAX_AGE_HOURS` — max age of Exa page contents (default `24`)
+- `PRICE_CONCURRENCY`, `BROWSERLESS_CONCURRENCY`, `FIRECRAWL_CONCURRENCY` — lookup parallelism
+- `KROGER_CLIENT_ID`, `KROGER_CLIENT_SECRET` + `KROGER_LOCATION_ID` or `KROGER_ZIP` — when set, Kroger prices come from Kroger's Products API for one pinned store instead of Exa (Kroger has no national price, and Exa's crawler lands on a store we can't choose)
 
-`.env.local` is gitignored; the key is only ever read on the server.
+`.env.local` is gitignored; keys are only read on the server.
 
-### 4. Initialize SQLite
+### 3. Initialize SQLite
 
 ```bash
 npm run db:push
 ```
 
-This creates `local.db` (gitignored) and syncs it to the schema in `lib/db/schema.ts`. Re-run it any time you change the schema. `npm run db:studio` opens a browser UI to inspect the data.
+Creates `local.db` (gitignored) and syncs it to `lib/db/schema.ts`. Re-run after schema changes — push is fine, this is a prototype. `npm run db:studio` opens a browser UI to inspect the data.
 
-### 5. Start the dev server
-
-```bash
-npm run dev
-```
-
-Open http://localhost:3000, paste some text, and click **Analyze** to verify the full loop (UI → API route → OpenAI → Zod validation → SQLite → UI).
-
-### 6. Validation and production build
+## Validation and build
 
 ```bash
 npm run lint        # ESLint
 npm run typecheck   # tsc --noEmit
-npm run test        # Vitest (schema + DB round-trip tests, no API key needed)
+npm run test        # Vitest
 npm run build       # production build
-npm run start       # serve the production build
 ```
 
 ## Project layout
 
 ```
 app/
-  page.tsx                  # sample UI (form, loading, error, results)
-  layout.tsx                # root layout
-  api/analyses/route.ts     # sample API route: GET list, POST analyze+store
+  page.tsx                  # price matrix UI
+  eval/page.tsx             # Eval tab (Exa vs. golden set)
+  browser-use/page.tsx      # Browser-Use tab (Browserless/Firecrawl vs. golden set)
+  api/prices/route.ts       # matrix data + CSV export
+  api/runs/route.ts         # start/poll refresh runs
+  api/history/route.ts      # observation history for one UPC
+  api/eval/route.ts         # eval scoring
+  api/browser-use/route.ts  # browser-tool retries
 lib/
-  ai.ts                     # model setup + analyzeText() — ALL LLM calls live here
-  db/
-    schema.ts               # Drizzle table definitions
-    index.ts                # SQLite connection + Drizzle client
-components/ui/              # shadcn/ui components (add more: npx shadcn add <name>)
-tests/                      # Vitest tests
-drizzle.config.ts           # Drizzle Kit config (db:push / db:studio)
-.env.example                # environment template
-AGENTS.md / CLAUDE.md       # guidance for AI coding agents
+  ai.ts                     # model setup + LLM calls (server-side only)
+  exa.ts                    # Exa API wrapper (search, contents, deep search)
+  pricing.ts                # per SKU × retailer lookup pipeline + background runs
+  retailers.ts              # retailer config + price basis
+  eval.ts                   # golden-set scoring
+  browser-use.ts            # Browserless/Firecrawl retries of Exa misses
+  insights.ts               # price index vs. median, CSV export
+  kroger.ts                 # Kroger Products API (optional, one pinned store)
+  upc.ts, size.ts           # UPC/GTIN matching, pack-size normalization
+  db/schema.ts              # skus, runs, observations, browser_checks
+data/
+  skus.json                 # tracked assortment (seeded on first load)
+  golden-set.json           # hand-verified eval set
+tests/                      # Vitest
+scripts/target-browserless.mts  # Target scrape experiment (npm run target:browserless)
 ```
 
-| Concern  | File |
-|----------|------|
-| Frontend | `app/page.tsx` |
-| AI calls | `lib/ai.ts` |
-| Zod schemas | `lib/ai.ts` (LLM output), `app/api/analyses/route.ts` (request body) |
-| API | `app/api/analyses/route.ts` |
-| Database | `lib/db/schema.ts`, `lib/db/index.ts` |
+## Notes
 
-## Replacing the sample feature during an interview
-
-The Text Analyzer is a template for the pattern *submit → LLM → validate → store → display*. To build your own feature:
-
-1. **Schema** — replace the `analyses` table in `lib/db/schema.ts` with your table(s), then `npm run db:push`. (If the old table shape conflicts, just delete `local.db` and push again — it's throwaway data.)
-2. **AI** — in `lib/ai.ts`, replace `analysisSchema` and `analyzeText()` with your Zod schema and a `generateText` call with `output: Output.object({ schema })` (or `streamText` for streaming, or plain `generateText` for free-form text). Keep all LLM calls in this file.
-3. **API** — rename/replace `app/api/analyses/route.ts`. The existing route shows the shape: validate the request body with Zod → call the AI helper → write with Drizzle → return JSON with proper status codes.
-4. **UI** — rewrite `app/page.tsx`. Reuse the existing loading/error/list patterns and the shadcn components in `components/ui/`.
-5. **Tests** — update `tests/` to cover your new Zod schema and table.
-
-Delete freely — nothing outside those files depends on the sample.
-
-## Troubleshooting
-
-- **`Could not load past analyses` in the UI / `no such table: analyses`** — you haven't run `npm run db:push` yet.
-- **500 "Analysis failed" on submit** — usually a missing/invalid `OPENAI_API_KEY` in `.env.local`. Check the terminal running `npm run dev` for the underlying error. Restart the dev server after editing env files.
-- **`better-sqlite3` errors on install or import** (e.g. `Could not locate the bindings file`) — the native module didn't build. Run `npm rebuild better-sqlite3`; make sure install scripts weren't blocked (see step 2).
-- **Node version errors or `EBADENGINE` warnings** — switch to Node 24 LTS (`nvm use` reads `.nvmrc`). Node 22.12+ also works.
-- **Schema change not reflected** — run `npm run db:push` again; for destructive changes on throwaway data, delete `local.db*` and push.
-- **Port 3000 in use** — `npm run dev -- -p 3001`.
-
-## Deliberate non-goals
-
-No auth, no Docker, no Postgres, no agent frameworks, no workflow orchestration, no tracing platforms. Add them only if your project actually needs them.
+- **Price basis.** Every observation records `priceBasis`: `online` (national ship-to-home) or `kroger:<storeId>` (Kroger has no national price). Only same-basis prices are compared — Kroger-via-Exa (`kroger:exa-default`) doesn't count against Kroger-via-API and vice versa.
+- **Target** hides prices from crawlers and bot-blocks headless browsers, so Target prices come from Exa deep search and are flagged `third_party`.
+- **Costs.** A full refresh is ~$5 of Exa usage plus OpenAI tokens; the UI confirms before starting one.
