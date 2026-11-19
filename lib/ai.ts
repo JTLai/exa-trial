@@ -89,7 +89,7 @@ Rules:
 - Ignore search/category/review/Q&A pages, and third-party marketplace bundles that mix different products.
 - Retailers (especially Walmart) often show one product page for several pack sizes, with a pack-size selector listing each option and its price (e.g. "Pack Size: 2 Pack", "Single $9.74", "2 Pack $18.99"). The page's "current price" is for whichever option is pre-selected. If an option matches the SKU's pack (e.g. "Single" for a single bottle), return it in packOption and use matchType "exact"; otherwise packOption is null.
 - Price is the price a shopper pays now for a one-time purchase. Ignore per-unit prices ("$x/fl oz"), subscribe & save, and prices of other products on the page.
-- If page text and structured data disagree, prefer the price shown in the page text and lower your confidence.
+- We compare the retailer's national online (ship-to-home) price. Structured data sold by ${input.retailerName} itself is that price for the pre-selected listing, so if it disagrees with the page text, prefer the structured price: page text can include store/pickup prices, other sellers, or other products. Only use a different price when it is the SKU's own pack-size option (packOption).
 - Never guess a price that isn't on the page. If the page doesn't show one, return price null.
 
 ${pages}`,

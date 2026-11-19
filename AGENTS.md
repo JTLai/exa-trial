@@ -24,6 +24,9 @@ A minimal Next.js starter for building small AI-powered apps quickly (e.g. durin
 - `lib/pricing.ts` — per SKU × retailer lookup pipeline + background runs
 - `lib/retailers.ts`, `lib/upc.ts` — retailer config, UPC/GTIN matching
 - `lib/insights.ts` — price index vs. cross-retailer median, CSV export
+- `lib/kroger.ts` — Kroger Products API (one pinned store) when `KROGER_CLIENT_ID`/`SECRET` are set
+- `lib/eval.ts`, `data/golden-set.json`, `app/eval/page.tsx` — Eval tab: Exa prices vs. a hand-verified golden set (accuracy + freshness)
+- `lib/browser-use.ts`, `app/browser-use/page.tsx`, `app/api/browser-use/route.ts` — Browser-Use tab: re-tries Eval's Exa misses with Browserless Smart Scrape and Firecrawl Interact (`BROWSERLESS_API_KEY`, `FIRECRAWL_API_KEY`), results in `browser_checks`
 - `data/skus.json` — tracked assortment (from the client's spreadsheet), seeded into SQLite on first load
 - `app/api/{prices,runs,history}/route.ts` — API routes
 - `app/page.tsx` — price matrix UI
@@ -33,6 +36,7 @@ A minimal Next.js starter for building small AI-powered apps quickly (e.g. durin
 
 - After changing `lib/db/schema.ts`, run `npm run db:push` (no migration files — push is fine for prototypes).
 - Before declaring work done, run: `npm run lint && npm run typecheck && npm run test && npm run build`.
+- Every observation records `priceBasis`: `online` (national ship-to-home price) or `kroger:<storeId>` (Kroger has no national price). Only compare prices with the same basis.
 - Target hides prices from crawlers and bot-blocks headless browsers, so Target prices come from Exa deep search and are flagged third-party.
 
 ## Git management

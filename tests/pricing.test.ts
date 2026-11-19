@@ -1,9 +1,29 @@
 import { describe, expect, it } from "vitest";
 import { priceAppearsOnPage, priceExtractionSchema } from "@/lib/ai";
 import type { Observation } from "@/lib/db/schema";
-import { buildRows, enforceExactSku, latestByKey, median, summarizeRetailers, toCsv } from "@/lib/insights";
-import { RETAILERS } from "@/lib/retailers";
-import { compareSize, findPackOption, optionPriceOnPage, packLabel, packOfLabel, packRatio, parseSize } from "@/lib/size";
+import {
+  buildRows,
+  enforceExactSku,
+  latestByKey,
+  median,
+  retrievalOutcome,
+  summarizeRetailers,
+  summarizeRetrieval,
+  toCsv,
+} from "@/lib/insights";
+import { onlinePriceFromStructured } from "@/lib/pricing";
+import { priceBasisOf, RETAILERS } from "@/lib/retailers";
+import {
+  compareSize,
+  findPackOption,
+  listingName,
+  optionPriceOnPage,
+  packLabel,
+  packOfLabel,
+  packRatio,
+  parseSize,
+  singleUnitRatio,
+} from "@/lib/size";
 import { brandOf } from "@/lib/skus";
 import { gtinMatches, krogerProductCode, normalizeGtin } from "@/lib/upc";
 
@@ -87,6 +107,7 @@ describe("insights", () => {
     matchType: price == null ? "not_found" : "exact",
     confidence: "high",
     source: "retailer_page",
+    priceBasis: null,
     upcVerified: true,
     packRatio: null,
     packOption: null,
@@ -134,6 +155,33 @@ describe("insights", () => {
     const csv = toCsv(rows);
     expect(csv.split("\n")).toHaveLength(1 + 2 * 5);
     expect(csv).toContain("1,A,X,walmart,priced,9");
+  });
+
+  it("classifies Exa retrieval outcomes", () => {
+    expect(retrievalOutcome(undefined)).toBe("not_checked");
+    expect(retrievalOutcome(obs("1", "walmart", 9))).toBe("confident");
+    expect(retrievalOutcome(obs("1", "target", 9, { confidence: "low" }))).toBe("low_confidence");
+    expect(retrievalOutcome(obs("1", "walmart", null, { status: "error" }))).toBe("blocked");
+    expect(retrievalOutcome(obs("1", "target", null, { status: "no_price", matchType: "exact", availability: "unknown" }))).toBe("blocked");
+    expect(
+      retrievalOutcome(obs("1", "kroger", null, { status: "no_price", matchType: "exact", availability: "out_of_stock", notes: "page only shows 'Prices May Vary'" })),
+    ).toBe("blocked");
+    expect(retrievalOutcome(obs("1", "amazon", null, { status: "no_price", matchType: "exact", availability: "out_of_stock" }))).toBe("unavailable");
+    expect(retrievalOutcome(obs("1", "walgreens", null, { notes: "No match: none of the candidates are this SKU" }))).toBe("unavailable");
+    expect(retrievalOutcome(obs("1", "walgreens", null, { notes: "No pages found on walgreens.com" }))).toBe("blocked");
+
+    const rows = buildRows(
+      [{ upc: "1", title: "A", brand: "X" }],
+      latestByKey([
+        obs("1", "walmart", 9),
+        obs("1", "target", 9, { confidence: "low" }),
+        obs("1", "amazon", null),
+        obs("1", "kroger", 3, { priceBasis: "kroger:123" }), // Kroger API, not Exa
+      ]),
+    );
+    const r = summarizeRetrieval(rows);
+    expect(r).toMatchObject({ total: 4, retrieved: 2, confident: 1, low_confidence: 1, unavailable: 1, not_checked: 1 });
+    expect(r.byRetailer.find((c) => c.retailer === "kroger")?.total).toBe(0);
   });
 });
 
@@ -244,5 +292,54 @@ describe("findPackOption", () => {
     expect(findPackOption(page, 2)).toEqual({ label: "2 Pack", price: 18.99 });
     expect(findPackOption(page, 3)).toBeNull();
     expect(findPackOption("Single $9.74", 1)).toBeNull(); // no selector on the page
+  });
+});
+
+describe("onlinePriceFromStructured", () => {
+  const c = (price: number | null, seller: string | null) => ({ structured: { gtin: null, price, availability: null, seller } });
+  it("uses the retailer's own structured offer and ignores marketplace sellers", () => {
+    expect(onlinePriceFromStructured(c(21.97, "Walmart.com"), "Walmart")).toBe(21.97);
+    expect(onlinePriceFromStructured(c(21.97, null), "Walmart")).toBe(21.97);
+    expect(onlinePriceFromStructured(c(23.12, "Some Pharmacy LLC"), "Walmart")).toBeNull();
+    expect(onlinePriceFromStructured(c(null, "Walmart.com"), "Walmart")).toBeNull();
+  });
+});
+
+describe("priceBasisOf", () => {
+  it("defaults old rows to the basis Exa lookups had", () => {
+    expect(priceBasisOf({ retailer: "kroger" })).toBe("kroger:exa-default");
+    expect(priceBasisOf({ retailer: "walmart", priceBasis: null })).toBe("online");
+    expect(priceBasisOf({ retailer: "kroger", priceBasis: "kroger:01400943" })).toBe("kroger:01400943");
+  });
+});
+
+describe("listing name and single-unit packs", () => {
+  it("reads the full product name when Exa's title is truncated", () => {
+    const title = "PreserVision AREDS 3 Formula Eye Vitamin & Mineral Supplement, 120 ...";
+    const text = "PreserVision AREDS 3 Formula Eye Vitamin & Mineral Supplement, 120 Soft Gels - 4 Pack - Walmart.com\nHero image\n# PreserVision AREDS 3 Formula Eye Vitamin & Mineral Supplement, 120 Soft Gels - 4 Pack\n$171.45";
+    const name = listingName(title, text, "PreserVision", 171.45);
+    expect(name).toBe("PreserVision AREDS 3 Formula Eye Vitamin & Mineral Supplement, 120 Soft Gels - 4 Pack");
+    expect(packRatio("PreserVision AREDS 3 Formula Vitamin & Mineral Supplement 120 ct Mini Soft Gels", name)).toBe(4);
+  });
+
+  it("reads the priced product line from a category page", () => {
+    const text = "Eye Ointment\n- Muro 128 2% Solution - 0.5 fl oz\n$27.99\n- Muro 128 5% Sodium Chloride Hypertonicity Ophthalmic Ointment - 0.13 oz\n$29.99";
+    const name = listingName("Topical Antibiotics - Eye Ointment", text, "Muro 128", 29.99);
+    expect(name).toBe("Muro 128 5% Sodium Chloride Hypertonicity Ophthalmic Ointment - 0.13 oz");
+    expect(listingName("Some title with 10 ct", "nothing useful", "Muro 128", 5)).toBe("Some title with 10 ct");
+    // Walgreens grid layout: price above the name, with unit prices and savings lines around it.
+    const grid =
+      "Povidone-Iodine Solution - 8 fl oz \n\n$6.49\n\nMuro 128 2% Solution - 0.5 fl oz\n\n- Add to cart\n\n$29.99\n\n$230.69/oz\n\nExtra 15% off $35+ eligible items\n\nMuro 128 5% Sodium Chloride Hypertonicity Ophthalmic Ointment - 0.13 oz \n\nMuro 128\n\nSave $5.00 with Walgreens brand\n\nStore inventory unavailable\n\n(1)\n\n- Add to cart\n\n$12.99";
+    expect(listingName("Walgreens | Walgreens", grid, "Muro 128", 29.99)).toBe(
+      "Muro 128 5% Sodium Chloride Hypertonicity Ophthalmic Ointment - 0.13 oz",
+    );
+  });
+
+  it("scales a single unit up to a twin-pack SKU only when the unit size matches", () => {
+    const sku = "Muro 128 5% Ointment 2 x 0.125 oz (3.5 g)";
+    expect(singleUnitRatio(sku, "Muro 128 5% Ointment - 0.13 oz")).toBe(0.5);
+    expect(singleUnitRatio(sku, "Muro 128 5% Ointment - 0.25 oz")).toBeNull(); // shows the twin pack's total
+    expect(singleUnitRatio(sku, "Muro 128 5% Ointment 2 Pack 0.125 oz")).toBeNull();
+    expect(singleUnitRatio("Muro 128 5% Ointment 0.125 oz", "Muro 128 - 0.13 oz")).toBeNull(); // SKU is a single
   });
 });

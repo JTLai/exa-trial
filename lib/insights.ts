@@ -1,5 +1,5 @@
 import type { Observation, Sku } from "./db/schema";
-import { RETAILER_IDS, RETAILERS, type RetailerId } from "./retailers";
+import { KROGER_EXA_BASIS, priceBasisOf, RETAILER_IDS, RETAILERS, type RetailerId } from "./retailers";
 import { compareSize, packLabel, packRatio } from "./size";
 
 export type SkuRow = Sku & {
@@ -128,6 +128,70 @@ export function summarizeRetailers(rows: SkuRow[]): RetailerSummary[] {
       highestCount,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Retrieval metrics: how many of the SKU × retailer prices we want did Exa actually get?
+
+export const RETRIEVAL_OUTCOMES = ["confident", "low_confidence", "blocked", "unavailable", "not_checked"] as const;
+export type RetrievalOutcome = (typeof RETRIEVAL_OUTCOMES)[number];
+
+export type RetrievalCounts = Record<RetrievalOutcome, number> & {
+  /** SKU × retailer cells we want a price for (excludes cells priced by a non-Exa source such as the Kroger API). */
+  total: number;
+  /** confident + low_confidence */
+  retrieved: number;
+};
+export type RetrievalSummary = RetrievalCounts & { byRetailer: (RetrievalCounts & { retailer: RetailerId })[] };
+
+/** Found on the retailer's site but the page hides the price from crawlers (Target's client-side prices, Kroger's "Prices May Vary"). */
+const HIDDEN_PRICE = /prices may vary/i;
+/** not_listed because Exa returned nothing usable, not because the retailer was shown not to carry it. */
+const SEARCH_MISS = /no pages found|could not confirm the size/i;
+
+/** Exa-sourced unless it came from the Kroger Products API (basis `kroger:<storeId>`). */
+export function isExaObservation(o: Observation): boolean {
+  const basis = priceBasisOf(o);
+  return basis === "online" || basis === KROGER_EXA_BASIS;
+}
+
+/**
+ * Classify one (already exact-SKU-enforced) observation:
+ * - confident: exact-SKU price at high/medium confidence
+ * - low_confidence: exact-SKU price, low confidence
+ * - blocked: error, price hidden on a matched page, or search returned nothing usable — a retrieval failure
+ * - unavailable: retailer doesn't carry this exact SKU/size, or shows the listing as unavailable — justifiably no price
+ */
+export function retrievalOutcome(o: Observation | undefined): RetrievalOutcome {
+  if (!o) return "not_checked";
+  if (o.status === "error") return "blocked";
+  if (o.status === "priced" && o.price != null) return o.confidence === "low" ? "low_confidence" : "confident";
+  if (o.status === "not_listed") return SEARCH_MISS.test(o.notes ?? "") ? "blocked" : "unavailable";
+  // no_price on an exact match
+  if (HIDDEN_PRICE.test(o.notes ?? "")) return "blocked";
+  return o.availability === "out_of_stock" ? "unavailable" : "blocked";
+}
+
+const emptyCounts = (): RetrievalCounts => ({
+  total: 0, retrieved: 0, confident: 0, low_confidence: 0, blocked: 0, unavailable: 0, not_checked: 0,
+});
+
+export function summarizeRetrieval(rows: SkuRow[]): RetrievalSummary {
+  const overall = emptyCounts();
+  const byRetailer = RETAILER_IDS.map((retailer) => {
+    const c = emptyCounts();
+    for (const row of rows) {
+      const o = row.prices[retailer];
+      if (o && !isExaObservation(o)) continue;
+      const outcome = retrievalOutcome(o);
+      c[outcome]++;
+      c.total++;
+      if (outcome === "confident" || outcome === "low_confidence") c.retrieved++;
+    }
+    for (const k of Object.keys(overall) as (keyof RetrievalCounts)[]) overall[k] += c[k];
+    return { retailer, ...c };
+  });
+  return { ...overall, byRetailer };
 }
 
 const csvCell = (v: unknown) => {

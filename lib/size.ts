@@ -125,3 +125,62 @@ export function compareSize(skuTitle: string, listingText: string): SizeCheck {
   }
   return "match";
 }
+
+const hasSize = (text: string) => {
+  const s = parseSize(text);
+  return s.oz.length > 0 || s.counts.length > 0;
+};
+
+/**
+ * The listing's own product name, with its size and pack. Exa titles are often truncated
+ * ("…Supplement, 120 ...") or are a category page's title ("Topical Antibiotics - Eye Ointment"),
+ * while the page text names the product in full ("# …, 120 Soft Gels - 4 Pack", "- Muro 128 … - 0.13 oz").
+ * Prefers a text line that names the brand, shows a size, and whose nearest price is the extracted price.
+ */
+export function listingName(title: string, text: string, brand: string, price: number | null): string {
+  const truncated = /(\.\.\.|…)\s*$/.test(title);
+  const all = text.split("\n").filter((line) => line.trim());
+  // Selling prices only: not unit prices ("$230.69/oz") or savings ("Save $5.00").
+  const priceAt = all.map((line) => (/\bsave\b/i.test(line) ? null : (line.match(/\$\s?(\d+\.\d{2})(?!\s*\/)/)?.[1] ?? null)));
+  // Category pages list several products, some with the price after the name and some before it,
+  // so a product's price is the one closest to its name line (ties go to the price after).
+  const nearestPrice = (i: number) => {
+    for (let d = 0; d <= 6; d++) {
+      if (priceAt[i + d]) return priceAt[i + d];
+      if (d > 0 && priceAt[i - d]) return priceAt[i - d];
+    }
+    return null;
+  };
+  const lines = all
+    .map((line, i) => ({ name: line.replace(/^[\s#*>-]+/, "").replace(/\s*-\s*Walmart\.com\s*$/i, "").trim(), i }))
+    .filter(
+      (l) => l.name.length > 0 && l.name.length < 200 && l.name.toLowerCase().includes(brand.toLowerCase()) && hasSize(l.name),
+    );
+  if (price != null) {
+    const priced = lines.find((l) => nearestPrice(l.i) === price.toFixed(2));
+    if (priced) return priced.name;
+  }
+  if (!truncated && hasSize(title)) return title;
+  const prefix = title.replace(/(\.\.\.|…)\s*$/, "").slice(0, 30).toLowerCase();
+  return lines.find((l) => l.name.toLowerCase().startsWith(prefix))?.name ?? title;
+}
+
+/**
+ * When a multi-pack SKU (e.g. "2 x 0.125 oz") is only sold as a single unit of the same size,
+ * returns 1 / SKU pack so the single price can be scaled up to the SKU. Null otherwise.
+ * Only use it when the listing was judged a different size/pack: a twin pack may also show its per-unit size.
+ */
+export function singleUnitRatio(skuTitle: string, listingText: string): number | null {
+  const sku = parseSize(skuTitle);
+  const page = parseSize(listingText);
+  const skuPack = sku.pack ?? 1;
+  if (skuPack <= 1 || (page.pack != null && page.pack !== 1)) return null;
+  const sameUnit = (pageVals: number[], skuVals: number[]) => pageVals.some((p) => skuVals.some((s) => close(p, s)));
+  const showsTotal = (pageVals: number[], skuVals: number[]) => pageVals.some((p) => skuVals.some((s) => close(p, s * skuPack)));
+  const ozShared = sku.oz.length > 0 && page.oz.length > 0;
+  const countShared = sku.counts.length > 0 && page.counts.length > 0;
+  if (!ozShared && !countShared) return null;
+  if (ozShared && (!sameUnit(page.oz, sku.oz) || showsTotal(page.oz, sku.oz))) return null;
+  if (countShared && (!sameUnit(page.counts, sku.counts) || showsTotal(page.counts, sku.counts))) return null;
+  return 1 / skuPack;
+}

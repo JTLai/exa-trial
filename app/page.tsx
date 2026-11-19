@@ -8,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Observation, Run } from "@/lib/db/schema";
-import type { RetailerSummary, SkuRow } from "@/lib/insights";
+import type { RetailerSummary, RetrievalOutcome, RetrievalSummary, SkuRow } from "@/lib/insights";
 import { RETAILER_IDS, RETAILERS, type RetailerId } from "@/lib/retailers";
 import { packLabel } from "@/lib/size";
 
-type PricesResponse = { rows: SkuRow[]; retailers: RetailerSummary[]; activeRun: Run | null };
+type PricesResponse = { rows: SkuRow[]; retailers: RetailerSummary[]; retrieval: RetrievalSummary; activeRun: Run | null };
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const isComparable = (o?: Observation): o is Observation & { price: number } =>
@@ -115,6 +115,8 @@ export default function Home() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      {data ? <RetrievalPanel r={data.retrieval} /> : <Skeleton className="h-40 w-full" />}
 
       {data ? <RetailerCards summaries={data.retailers} total={data.rows.length} /> : <Skeleton className="h-28 w-full" />}
 
@@ -238,6 +240,119 @@ function RunProgress({ run }: { run: Run }) {
       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-foreground transition-all" style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+const OUTCOME_META: Record<RetrievalOutcome, { label: string; hint: string; bar: string; text: string }> = {
+  confident: {
+    label: "Retrieved",
+    hint: "Exact-SKU price at high or medium confidence",
+    bar: "bg-emerald-500",
+    text: "text-emerald-600",
+  },
+  low_confidence: {
+    label: "Low confidence",
+    hint: "Exact-SKU price, but low confidence (e.g. third-party source, or price not found verbatim on the page)",
+    bar: "bg-amber-400",
+    text: "text-amber-600",
+  },
+  blocked: {
+    label: "Blocked / missed",
+    hint: "Retailer probably sells it, but Exa didn't get a price: price hidden from the crawler (Target, Kroger \"Prices May Vary\"), search found nothing usable, or the lookup errored",
+    bar: "bg-rose-500",
+    text: "text-rose-600",
+  },
+  unavailable: {
+    label: "Not available",
+    hint: "Justifiably no price: the retailer doesn't carry this exact SKU/size, or shows the listing as unavailable",
+    bar: "bg-slate-400 dark:bg-slate-500",
+    text: "text-muted-foreground",
+  },
+  not_checked: { label: "Not checked", hint: "No lookup yet", bar: "bg-muted", text: "text-muted-foreground" },
+};
+
+function RetrievalPanel({ r }: { r: RetrievalSummary }) {
+  const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "—");
+  // Of the prices that exist to be found (everything but justified unavailables), how many did Exa get?
+  const findable = r.total - r.unavailable - r.not_checked;
+  const shown = RETRIEVAL_ORDER.filter((k) => k !== "not_checked" || r.not_checked > 0);
+  return (
+    <section className="space-y-3 rounded-lg border p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium">Exa retrieval</h2>
+        <p className="text-xs text-muted-foreground">
+          Latest lookup per SKU × retailer · {r.total} prices wanted
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Stat
+          label="Retrieved (any confidence)"
+          value={`${r.retrieved}/${r.total}`}
+          sub={`${pct(r.retrieved, r.total)} of all · ${pct(r.retrieved, findable)} of findable`}
+          hint="Findable = all prices wanted minus the justifiably unavailable ones"
+        />
+        {shown.map((k) => (
+          <Stat
+            key={k}
+            label={OUTCOME_META[k].label}
+            value={String(r[k])}
+            sub={`${pct(r[k], r.total)} of wanted`}
+            hint={OUTCOME_META[k].hint}
+            className={OUTCOME_META[k].text}
+            dot={OUTCOME_META[k].bar}
+          />
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        {r.byRetailer.map((c) => (
+          <div key={c.retailer} className="grid grid-cols-[80px_1fr_44px] items-center gap-2 text-xs">
+            <span className="text-muted-foreground">{RETAILERS[c.retailer].name}</span>
+            <div className="flex h-3 overflow-hidden rounded-full bg-muted">
+              {RETRIEVAL_ORDER.map((k) =>
+                c[k] ? (
+                  <div
+                    key={k}
+                    className={OUTCOME_META[k].bar}
+                    style={{ width: `${(c[k] / c.total) * 100}%` }}
+                    title={`${RETAILERS[c.retailer].name} · ${OUTCOME_META[k].label}: ${c[k]} of ${c.total}`}
+                  />
+                ) : null,
+              )}
+            </div>
+            <span className="text-right tabular-nums">{pct(c.retrieved, c.total)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const RETRIEVAL_ORDER: RetrievalOutcome[] = ["confident", "low_confidence", "blocked", "unavailable", "not_checked"];
+
+function Stat({
+  label,
+  value,
+  sub,
+  hint,
+  className = "",
+  dot,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  hint: string;
+  className?: string;
+  dot?: string;
+}) {
+  return (
+    <div className="space-y-0.5" title={hint}>
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        {dot && <span className={`size-2 rounded-full ${dot}`} />}
+        {label}
+      </div>
+      <div className={`text-2xl font-semibold tabular-nums ${className}`}>{value}</div>
+      <div className="text-[11px] text-muted-foreground">{sub}</div>
     </div>
   );
 }

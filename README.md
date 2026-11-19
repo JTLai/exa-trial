@@ -45,6 +45,8 @@ Edit `.env.local` and set `OPENAI_API_KEY`. Optional variables:
 
 - `AI_MODEL` — OpenAI model ID (default `gpt-5.1`)
 - `DATABASE_PATH` — SQLite file location (default `local.db` in the project root)
+- `KROGER_CLIENT_ID`, `KROGER_CLIENT_SECRET` — free credentials from developer.kroger.com. When set, Kroger prices come from Kroger's Products API for one pinned store instead of from Exa (Kroger has no national price, and Exa's crawler lands on a store we can't choose).
+- `KROGER_LOCATION_ID` or `KROGER_ZIP` — the Kroger reference store (by ID, or the nearest Kroger to a zip). Required with the credentials above.
 
 `.env.local` is gitignored; the key is only ever read on the server.
 

@@ -10,6 +10,8 @@ import { ensureSkus } from "@/lib/skus";
 const startRunSchema = z.object({
   upcs: z.array(z.string().regex(/^\d{8,14}$/)).max(500).optional(),
   retailers: z.array(z.enum(RETAILER_IDS)).min(1).default([...RETAILER_IDS]),
+  /** Exact SKU × retailer pairs (e.g. the eval golden set); overrides upcs × retailers. */
+  cells: z.array(z.object({ upc: z.string().regex(/^\d{8,14}$/), retailer: z.enum(RETAILER_IDS) })).max(500).optional(),
 });
 
 export async function GET() {
@@ -26,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A price refresh is already running." }, { status: 409 });
   }
   ensureSkus();
-  const { run, tasks } = createRun(parsed.data.upcs, parsed.data.retailers);
+  const { run, tasks } = createRun(parsed.data.upcs, parsed.data.retailers, parsed.data.cells);
   if (tasks.length === 0) {
     return NextResponse.json({ error: "No matching SKUs." }, { status: 400 });
   }

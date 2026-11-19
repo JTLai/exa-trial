@@ -3,8 +3,19 @@ import { extractPrice, priceAppearsOnPage, type PriceCandidate } from "./ai";
 import { db } from "./db";
 import { observations, runs, skus, type NewObservation, type Sku } from "./db/schema";
 import { deepSearchPrice, getContents, searchDomain, type ExaResult } from "./exa";
-import { RETAILERS, type RetailerId } from "./retailers";
-import { compareSize, findPackOption, optionPriceOnPage, packLabel, packOfLabel, packRatio, parseSize } from "./size";
+import { krogerApiConfigured, krogerStorePrice } from "./kroger";
+import { priceBasisOf, RETAILERS, type RetailerId } from "./retailers";
+import {
+  compareSize,
+  findPackOption,
+  listingName,
+  optionPriceOnPage,
+  packLabel,
+  packOfLabel,
+  packRatio,
+  parseSize,
+  singleUnitRatio,
+} from "./size";
 import { gtinMatches, urlContainsUpc } from "./upc";
 
 type Lookup = Omit<NewObservation, "runId">;
@@ -19,6 +30,14 @@ export function toCandidate(upc: string, r: ExaResult): PriceCandidate {
       ? { gtin: r.product.gtin, price: r.product.price, availability: r.product.availability, seller: r.product.seller }
       : null,
   };
+}
+
+/** The structured offer price, when the retailer itself (not a marketplace seller) is selling it. */
+export function onlinePriceFromStructured(candidate: Pick<PriceCandidate, "structured">, retailerName: string): number | null {
+  const s = candidate.structured;
+  if (s?.price == null) return null;
+  if (s.seller && !s.seller.toLowerCase().includes(retailerName.toLowerCase())) return null;
+  return s.price;
 }
 
 /** Find the SKU on the retailer's own site and read the price off the product page. */
@@ -55,13 +74,15 @@ async function lookupOnRetailerSite(sku: Sku, retailerId: RetailerId): Promise<L
   let { confidence, notes } = x;
   let matchType = match ? x.matchType : "not_found";
   let ratio: number | null = null;
+  // Size and pack come from the listing's full product name: Exa titles can be truncated or a category page's title.
+  const name = match ? listingName(match.title, match.text, sku.brand, x.price) : "";
 
   // Prefer the page's own pack-size option for the SKU's pack (Walmart shows "Single $9.74" on the 2-pack page)
   // over dividing the pre-selected pack's price. Trust it only if the option is the SKU's pack, the unit size
   // matches, and the label + price appear together on the page.
   const skuPack = parseSize(sku.title).pack ?? 1;
   const unitSizeOk =
-    !!match && (packRatio(sku.title, match.title) != null || compareSize(sku.title, match.title) !== "conflict");
+    !!match && (packRatio(sku.title, name) != null || compareSize(sku.title, name) !== "conflict");
   const llmOption =
     match && !match.gtinMatch && x.packOption && packOfLabel(x.packOption.label) === skuPack &&
     optionPriceOnPage(x.packOption.label, x.packOption.price, match.text)
@@ -76,18 +97,20 @@ async function lookupOnRetailerSite(sku: Sku, retailerId: RetailerId): Promise<L
   // otherwise the listing must show a matching size, not just a similar product name.
   // Exception: same unit size in a different pack (e.g. only a 2-pack) is normalized and tagged.
   if (match && !match.gtinMatch && !useOption && (matchType === "exact" || matchType === "different_size")) {
-    ratio = packRatio(sku.title, match.title);
+    ratio = packRatio(sku.title, name);
+    // A multi-pack SKU sold only as single units of the same size (e.g. Walgreens' single Muro tube for a 2-pack SKU).
+    if (ratio == null && x.matchType === "different_size") ratio = singleUnitRatio(sku.title, name);
     if (ratio != null) matchType = "exact";
   }
   if (match && !match.gtinMatch && matchType === "exact" && ratio == null && !useOption) {
-    let size = compareSize(sku.title, match.title);
-    if (size === "unknown") size = compareSize(sku.title, `${match.title}\n${match.text.slice(0, 1500)}`);
+    let size = compareSize(sku.title, name);
+    if (size === "unknown") size = compareSize(sku.title, `${name}\n${match.text.slice(0, 1500)}`);
     if (size === "conflict") {
       matchType = "different_size";
-      notes = `Listing is a different size/pack: "${match.title}".`;
+      notes = `Listing is a different size/pack: "${name}".`;
     } else if (size === "unknown") {
       matchType = "not_found";
-      notes = `Could not confirm the size on "${match.title}" and no UPC on the page.`;
+      notes = `Could not confirm the size on "${name}" and no UPC on the page.`;
     }
   }
   if (match?.gtinMatch) matchType = "exact";
@@ -100,10 +123,19 @@ async function lookupOnRetailerSite(sku: Sku, retailerId: RetailerId): Promise<L
       matchType: match ? matchType : "not_found",
       source: "retailer_page",
       url: match?.url ?? null,
-      productTitle: match?.title ?? null,
+      productTitle: match ? name : null,
       notes: `No match: ${notes}`,
       costUsd,
     };
+  }
+
+  // The retailer's own structured offer is its online price for this listing; page text can carry
+  // store/pickup prices or other sellers' offers. Keep it unless a pack option or pack normalization applies.
+  const structuredPrice = onlinePriceFromStructured(match, retailer.name);
+  if (!useOption && ratio == null && structuredPrice != null && x.price != null && x.price !== structuredPrice) {
+    notes = `Used the retailer's structured online price $${structuredPrice.toFixed(2)} over $${x.price.toFixed(2)} read from page text. ${notes}`;
+    x.price = structuredPrice;
+    if (x.regularPrice != null && x.regularPrice <= structuredPrice) x.regularPrice = null;
   }
 
   if (!useOption && x.price != null && !priceAppearsOnPage(x.price, match)) {
@@ -114,7 +146,7 @@ async function lookupOnRetailerSite(sku: Sku, retailerId: RetailerId): Promise<L
   const price = useOption ? option!.price : normalize(x.price);
   const regularPrice = useOption ? option!.regularPrice : normalize(x.regularPrice);
   if (useOption) notes = `Price from the page's "${option!.label}" pack-size option. ${notes}`;
-  if (ratio != null) notes = `Only a different pack is listed ("${match.title}"); price normalized ${packLabel(ratio)}. ${notes}`;
+  if (ratio != null) notes = `Only a different pack is listed ("${name}"); price normalized ${packLabel(ratio)}. ${notes}`;
 
   return {
     upc: sku.upc,
@@ -132,7 +164,7 @@ async function lookupOnRetailerSite(sku: Sku, retailerId: RetailerId): Promise<L
     source: "retailer_page",
     upcVerified: match.gtinMatch,
     url: match.url,
-    productTitle: match.title,
+    productTitle: name,
     notes,
     costUsd,
   };
@@ -176,10 +208,51 @@ async function lookupViaDeepSearch(sku: Sku, retailerId: RetailerId): Promise<Lo
   };
 }
 
+/** Kroger prices are per store, so price one pinned reference store through Kroger's own Products API. */
+async function lookupKrogerStore(sku: Sku): Promise<Lookup> {
+  const k = await krogerStorePrice(sku.upc);
+  const base = {
+    upc: sku.upc,
+    retailer: "kroger",
+    source: "retailer_page" as const,
+    priceBasis: `kroger:${k.storeId}`,
+    url: RETAILERS.kroger.directUrl!(sku.upc),
+    costUsd: 0,
+  };
+  if (!k.found) {
+    return { ...base, status: "not_listed", matchType: "not_found", notes: `Kroger API has no product for this UPC at ${k.storeName}.` };
+  }
+  const size = k.size ? compareSize(sku.title, `${k.description ?? ""} ${k.size}`) : "unknown";
+  if (size === "conflict") {
+    return {
+      ...base,
+      status: "not_listed",
+      matchType: "different_size",
+      productTitle: k.description,
+      notes: `No match: Kroger's product for this UPC is a different size ("${k.description}, ${k.size}").`,
+    };
+  }
+  return {
+    ...base,
+    status: k.price != null ? "priced" : "no_price",
+    price: k.price,
+    regularPrice: k.regularPrice,
+    availability: k.availability,
+    matchType: "exact",
+    confidence: "high",
+    upcVerified: true,
+    productTitle: k.description,
+    notes: k.price != null ? `Kroger API price at ${k.storeName}.` : `Listed at ${k.storeName} but the API returned no price.`,
+  };
+}
+
 export async function lookupPrice(sku: Sku, retailerId: RetailerId): Promise<Lookup> {
-  return RETAILERS[retailerId].priceVia === "deep_search"
-    ? lookupViaDeepSearch(sku, retailerId)
-    : lookupOnRetailerSite(sku, retailerId);
+  if (retailerId === "kroger" && krogerApiConfigured()) return lookupKrogerStore(sku);
+  const result =
+    RETAILERS[retailerId].priceVia === "deep_search"
+      ? await lookupViaDeepSearch(sku, retailerId)
+      : await lookupOnRetailerSite(sku, retailerId);
+  return { ...result, priceBasis: priceBasisOf({ retailer: retailerId }) };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,11 +274,18 @@ export function activeRun() {
   return run;
 }
 
-export function createRun(upcs: string[] | undefined, retailers: RetailerId[]) {
-  const targetSkus = upcs?.length
-    ? db.select().from(skus).where(inArray(skus.upc, upcs)).all()
+export function createRun(
+  upcs: string[] | undefined,
+  retailers: RetailerId[],
+  cells?: { upc: string; retailer: RetailerId }[],
+) {
+  const wanted = cells?.length ? cells.map((c) => c.upc) : upcs;
+  const targetSkus = wanted?.length
+    ? db.select().from(skus).where(inArray(skus.upc, wanted)).all()
     : db.select().from(skus).all();
-  const tasks = targetSkus.flatMap((sku) => retailers.map((retailerId) => ({ sku, retailerId })));
+  const tasks = cells?.length
+    ? cells.flatMap((c) => targetSkus.filter((s) => s.upc === c.upc).map((sku) => ({ sku, retailerId: c.retailer })))
+    : targetSkus.flatMap((sku) => retailers.map((retailerId) => ({ sku, retailerId })));
   const run = db.insert(runs).values({ status: "running", total: tasks.length }).returning().get();
   return { run, tasks };
 }

@@ -39,6 +39,11 @@ export const observations = sqliteTable(
     confidence: text("confidence", { enum: ["high", "medium", "low"] }),
     /** retailer_page = read from the retailer's own product page; third_party = Exa deep search across other sources. */
     source: text("source", { enum: ["retailer_page", "third_party"] }),
+    /**
+     * Which price this is, so only like-for-like prices are compared: "online" (national ship-to-home price)
+     * or "kroger:<locationId>" (one Kroger store; Kroger has no national price). Null on rows from before this existed.
+     */
+    priceBasis: text("price_basis"),
     /** Set when the retailer only sells a different pack: listing pack ÷ SKU pack. `price` is normalized by it. */
     packRatio: real("pack_ratio"),
     /** Pack-size option on the page whose price was used (e.g. "Single" on Walmart's 2-pack page). */
@@ -60,3 +65,32 @@ export type Sku = typeof skus.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type Observation = typeof observations.$inferSelect;
 export type NewObservation = typeof observations.$inferInsert;
+
+export const BROWSER_TOOLS = ["browserless", "firecrawl"] as const;
+export type BrowserTool = (typeof BROWSER_TOOLS)[number];
+
+/** One attempt by a browser-automation product to read the price of a golden-set item Exa missed (Browser-Use tab). */
+export const browserChecks = sqliteTable(
+  "browser_checks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    upc: text("upc").notNull(),
+    retailer: text("retailer").notNull(),
+    tool: text("tool", { enum: BROWSER_TOOLS }).notNull(),
+    status: text("status", { enum: ["running", "priced", "no_price", "error"] }).notNull(),
+    /** Price of the listing exactly as the tool read it. */
+    price: real("price"),
+    productTitle: text("product_title"),
+    availability: text("availability", { enum: ["in_stock", "out_of_stock", "unknown"] }),
+    notes: text("notes"),
+    url: text("url").notNull(),
+    /** How the tool got there, e.g. Browserless strategy or Firecrawl credits. */
+    detail: text("detail"),
+    durationMs: integer("duration_ms"),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+    finishedAt: integer("finished_at", { mode: "timestamp" }),
+  },
+  (t) => [index("browser_checks_key_idx").on(t.upc, t.retailer, t.tool, t.startedAt)],
+);
+
+export type BrowserCheck = typeof browserChecks.$inferSelect;

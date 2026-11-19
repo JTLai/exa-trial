@@ -2,7 +2,7 @@ import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { observations, skus } from "@/lib/db/schema";
-import { buildRows, latestByKey, summarizeRetailers, toCsv } from "@/lib/insights";
+import { buildRows, latestByKey, summarizeRetailers, summarizeRetrieval, toCsv } from "@/lib/insights";
 import { activeRun } from "@/lib/pricing";
 import { ensureSkus } from "@/lib/skus";
 
@@ -20,5 +20,10 @@ export async function GET(request: Request) {
       },
     });
   }
-  return NextResponse.json({ rows, retailers: summarizeRetailers(rows), activeRun: activeRun() ?? null });
+  return NextResponse.json({
+    rows,
+    retailers: summarizeRetailers(rows),
+    retrieval: summarizeRetrieval(rows),
+    activeRun: activeRun() ?? null,
+  });
 }

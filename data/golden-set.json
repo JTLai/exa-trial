@@ -1,0 +1,501 @@
+{
+  "version": 3,
+  "verifiedAt": "2026-11-18T19:30:00Z",
+  "method": "Prices read by hand from each retailer's live product page in a real browser (no store selected, not signed in). Prices are normalized to the SKU's own pack, the same way the tracker does it. Each price records its basis: \"online\" is the national ship-to-home price; Kroger has no national price, so Kroger cells were read at whichever store the browser was assigned (\"kroger:browser-default\", store not identified).",
+  "stratification": "Sampled across retailer × what Exa returned (priced high / medium / low confidence, no price, pack mismatch, marketplace seller, suspected wrong-product match), from the 2026-11-18 runs. Walmart is over-weighted because it was the most reliably checkable by hand.",
+  "items": [
+    {
+      "upc": "310119538203",
+      "retailer": "walmart",
+      "stratum": "priced · high",
+      "basis": "online",
+      "expected": {
+        "status": "priced",
+        "price": 21.97,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/12105752855",
+      "notes": "Single-pack option $21.97."
+    },
+    {
+      "upc": "310119056110",
+      "retailer": "walmart",
+      "stratum": "priced · high",
+      "basis": "online",
+      "expected": {
+        "status": "priced",
+        "price": 9.58,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/10448594",
+      "notes": "Single-pack option $9.58."
+    },
+    {
+      "upc": "329943004105",
+      "retailer": "walmart",
+      "stratum": "priced · medium · pack-normalized",
+      "basis": "online",
+      "expected": {
+        "status": "priced",
+        "price": 14.57,
+        "listedPrice": 29.14,
+        "packRatio": 2,
+        "availability": "unknown"
+      },
+      "url": "https://www.walmart.com/ip/160490860",
+      "notes": "Walmart only sells a 2-pack at $29.14, so $14.57 per bottle."
+    },
+    {
+      "upc": "324208387603",
+      "retailer": "walmart",
+      "stratum": "no price · high",
+      "basis": "online",
+      "expected": {
+        "status": "no_price",
+        "price": null,
+        "availability": "out_of_stock"
+      },
+      "url": "https://www.walmart.com/ip/46230502",
+      "notes": "Page lists only 2–6 packs, all out of stock; no single-bottle price."
+    },
+    {
+      "upc": "310119007365",
+      "retailer": "walmart",
+      "stratum": "priced · medium · suspect match",
+      "basis": "online",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.walmart.com/search?q=310119007365",
+      "notes": "UPC search returns nothing. Exa matched Clear Eyes Sensitive, a competitor's product."
+    },
+    {
+      "upc": "310119022979",
+      "retailer": "kroger",
+      "stratum": "priced · high",
+      "basis": "kroger:browser-default",
+      "expected": {
+        "status": "priced",
+        "price": 18.99,
+        "availability": "unknown"
+      },
+      "url": "https://www.kroger.com/p/item/0031011902297",
+      "notes": "UPC shown on page. Pickup/delivery says unavailable without a store selected."
+    },
+    {
+      "upc": "310119054215",
+      "retailer": "kroger",
+      "stratum": "priced · high",
+      "basis": "kroger:browser-default",
+      "expected": {
+        "status": "priced",
+        "price": 10.99,
+        "availability": "in_stock"
+      },
+      "url": "https://www.kroger.com/p/item/0031011905421",
+      "notes": "UPC shown on page; pickup available."
+    },
+    {
+      "upc": "310119537251",
+      "retailer": "kroger",
+      "stratum": "priced · high",
+      "basis": "kroger:browser-default",
+      "expected": {
+        "status": "priced",
+        "price": 22.99,
+        "availability": "in_stock"
+      },
+      "url": "https://www.kroger.com/p/item/0031011953725",
+      "notes": "UPC shown on page; Low Stock, pickup available."
+    },
+    {
+      "upc": "324208465400",
+      "retailer": "kroger",
+      "stratum": "priced · medium · suspect match",
+      "basis": "kroger:browser-default",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.kroger.com/p/item/0032420846540",
+      "notes": "The 30 ct UPC page says Product Unavailable. Exa priced the 50 ct (UPC 0032420846530), which is $15.99 live."
+    },
+    {
+      "upc": "310119537480",
+      "retailer": "kroger",
+      "stratum": "priced · medium · suspect match",
+      "basis": "kroger:browser-default",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.kroger.com/p/item/0031011953748",
+      "notes": "The PURPLE SKU's UPC page says Product Unavailable. Exa priced the regular 0.25 oz SKU (0031011953725), which is $22.99 live."
+    },
+    {
+      "upc": "310119002384",
+      "retailer": "kroger",
+      "stratum": "no price · medium",
+      "basis": "kroger:browser-default",
+      "expected": {
+        "status": "no_price",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.kroger.com/p/item/0031011900238",
+      "notes": "Listed (UPC on page) but shows \"Prices May Vary\" with no price."
+    },
+    {
+      "upc": "324208697627",
+      "retailer": "walgreens",
+      "stratum": "priced · low",
+      "basis": "online",
+      "expected": {
+        "status": "priced",
+        "price": 39.99,
+        "availability": "in_stock",
+        "promo": "Buy 1, Get 1 50% OFF"
+      },
+      "url": "https://www.walgreens.com/store/c/preservision-areds-2-formula-eye-vitamin-%26-mineral-supplement-softgels/ID=prod6206653-product",
+      "notes": "120 ct softgels at $39.99; ships in 2–4 days."
+    },
+    {
+      "upc": "324208385562",
+      "retailer": "walgreens",
+      "stratum": "priced · low · pack mismatch",
+      "basis": "online",
+      "expected": {
+        "status": "priced",
+        "price": 59.98,
+        "listedPrice": 29.99,
+        "packRatio": 0.5,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walgreens.com/store/c/muro-128-5-sodium-chloride-hypertonicity-ophthalmic-ointment/ID=prod352379-product",
+      "notes": "Walgreens only sells a single 0.13 oz tube at $29.99. The SKU is a 2-pack, so normalized to $59.98."
+    },
+    {
+      "upc": "324208521007",
+      "retailer": "target",
+      "stratum": "priced · medium · third-party",
+      "basis": "online",
+      "expected": {
+        "status": "priced",
+        "price": 24.49,
+        "availability": "in_stock"
+      },
+      "url": "https://www.target.com/p/blink-nutri-tears-eye-treatment-8-fl-oz-50ct/-/A-90381026",
+      "notes": "50 ct at $24.49, \"Only 4 left\" for pickup."
+    },
+    {
+      "upc": "324208697900",
+      "retailer": "walmart",
+      "stratum": "priced · high",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 26.58,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/51209070",
+      "notes": "90 ct MiniGels at $26.58."
+    },
+    {
+      "upc": "329943002156",
+      "retailer": "walmart",
+      "stratum": "priced · high · rollback",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 10.96,
+        "regularPrice": 14.95,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/10416192",
+      "notes": "Single option \"Now $10.96, was $14.95\"."
+    },
+    {
+      "upc": "324208698648",
+      "retailer": "walmart",
+      "stratum": "priced · medium",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 41.57,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/126268187",
+      "notes": "Single option $41.57."
+    },
+    {
+      "upc": "310119002384",
+      "retailer": "walmart",
+      "stratum": "priced · high",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 14.86,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/1115608",
+      "notes": "12 fl oz at $14.86."
+    },
+    {
+      "upc": "324208743621",
+      "retailer": "walmart",
+      "stratum": "priced · medium · pack mismatch",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 42.86,
+        "listedPrice": 171.45,
+        "packRatio": 4,
+        "availability": "unknown"
+      },
+      "url": "https://www.walmart.com/ip/20073654670",
+      "notes": "Only a 4-pack is listed, at $171.45, so $42.86 per bottle. Exa stored the 4-pack price."
+    },
+    {
+      "upc": "827444000324",
+      "retailer": "walmart",
+      "stratum": "priced · high",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T22:00:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 7.48,
+        "availability": "in_stock"
+      },
+      "url": "https://www.walmart.com/ip/10418359",
+      "notes": "Sold and shipped by Walmart.com at $7.48. (A Hey Pharma marketplace listing is $13.46.) Corrected after Exa found this listing."
+    },
+    {
+      "upc": "310119035887",
+      "retailer": "walmart",
+      "stratum": "no price · medium",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T22:00:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 31.34,
+        "availability": "out_of_stock"
+      },
+      "url": "https://www.walmart.com/ip/19650959453",
+      "notes": "2 x 10 fl oz listing at $31.34, out of stock. (Another listing shows no price.) Corrected after Exa found this listing."
+    },
+    {
+      "upc": "324208465400",
+      "retailer": "walmart",
+      "stratum": "priced · medium · suspect match",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.walmart.com/search?q=324208465400",
+      "notes": "UPC search returns nothing. Exa priced the 50 ct ($20.99) for this 30 ct SKU."
+    },
+    {
+      "upc": "324208697634",
+      "retailer": "walmart",
+      "stratum": "priced · medium · suspect match",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.walmart.com/search?q=324208697634",
+      "notes": "UPC search returns nothing. Exa priced the 70 ct chewables (now $23.77) for this 60 ct SKU."
+    },
+    {
+      "upc": "324208387627",
+      "retailer": "walgreens",
+      "stratum": "no price · low",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 18.99,
+        "promo": "Buy 1, Get 1 50% OFF",
+        "availability": "in_stock"
+      },
+      "url": "https://www.walgreens.com/store/c/ocuvite-lutein-%26-antioxidants-tablets/ID=prod5081-product",
+      "notes": "120 ct tablets at $18.99. Exa reported no price."
+    },
+    {
+      "upc": "324208697634",
+      "retailer": "walgreens",
+      "stratum": "no price · medium",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 29.99,
+        "promo": "Buy 1, Get 1 50% OFF",
+        "availability": "in_stock"
+      },
+      "url": "https://www.walgreens.com/store/c/preservision-areds-2-formula-eye-vitamin-and-mineral-supplement,-chewable-tablets-mixed-berry/ID=prod6383769-product",
+      "notes": "60 ct chewables at $29.99. Exa reported no price."
+    },
+    {
+      "upc": "329943006109",
+      "retailer": "target",
+      "stratum": "priced · medium · third-party",
+      "basis": "online",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 14.49,
+        "availability": "in_stock"
+      },
+      "url": "https://www.target.com/p/blink-triple-care-lubricating-eye-drops-0-34-fl-oz/-/A-90293402",
+      "notes": "10 mL at $14.49, pickup in 2 hours."
+    },
+    {
+      "upc": "310119035863",
+      "retailer": "kroger",
+      "stratum": "priced · high",
+      "basis": "kroger:browser-default",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 11.99,
+        "availability": "in_stock"
+      },
+      "url": "https://www.kroger.com/p/item/0031011903586",
+      "notes": "UPC on page, $11.99, pickup available."
+    },
+    {
+      "upc": "310119035825",
+      "retailer": "kroger",
+      "stratum": "priced · high",
+      "basis": "kroger:browser-default",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "priced",
+        "price": 5.99,
+        "availability": "in_stock"
+      },
+      "url": "https://www.kroger.com/p/item/0031011903582",
+      "notes": "UPC on page, $5.99, pickup available."
+    },
+    {
+      "upc": "324208697641",
+      "retailer": "kroger",
+      "stratum": "priced · medium · suspect match",
+      "basis": "kroger:browser-default",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.kroger.com/p/item/0032420869764",
+      "notes": "This UPC's page says Product Unavailable. Exa priced a different UPC (0032420869763)."
+    },
+    {
+      "upc": "310119022382",
+      "retailer": "kroger",
+      "stratum": "priced · medium · suspect match",
+      "basis": "kroger:browser-default",
+      "verifiedAt": "2026-11-18T21:45:00Z",
+      "expected": {
+        "status": "not_listed",
+        "price": null,
+        "availability": "unknown"
+      },
+      "url": "https://www.kroger.com/p/item/0031011902238",
+      "notes": "This UPC's page says Product Unavailable. Exa priced a different Soothe product (0031011902219)."
+    }
+  ],
+  "skipped": [
+    {
+      "upc": "329943004105",
+      "retailer": "amazon",
+      "reason": "Amazon serves an \"Access restricted\" page to AI agents."
+    },
+    {
+      "upc": "324208465455",
+      "retailer": "amazon",
+      "reason": "Amazon serves an \"Access restricted\" page to AI agents."
+    },
+    {
+      "upc": "310119537107",
+      "retailer": "amazon",
+      "reason": "Not attempted after Amazon blocked the browser."
+    },
+    {
+      "upc": "324208432723",
+      "retailer": "amazon",
+      "reason": "Not attempted after Amazon blocked the browser."
+    },
+    {
+      "upc": "310119537084",
+      "retailer": "walgreens",
+      "reason": "Walgreens returned 403 Access Denied."
+    },
+    {
+      "upc": "827444000126",
+      "retailer": "walgreens",
+      "reason": "Walgreens returned a bot challenge page."
+    },
+    {
+      "upc": "310119098448",
+      "retailer": "target",
+      "reason": "Target page loaded but the price never rendered."
+    },
+    {
+      "upc": "827444000324",
+      "retailer": "target",
+      "reason": "Target page loaded but the price never rendered."
+    },
+    {
+      "upc": "310119020104",
+      "retailer": "target",
+      "reason": "Target page loaded but the price never rendered (marketplace seller listing)."
+    },
+    {
+      "upc": "340171005252",
+      "retailer": "walgreens",
+      "reason": "Exa's page is the 0.5 fl oz bottle, not the 25 ct vials; Walgreens search returned 403, so the right listing couldn't be checked."
+    },
+    {
+      "upc": "324208070536",
+      "retailer": "walgreens",
+      "reason": "Exa's page is Ocuvite Eye Performance, not Blue Light; Walgreens search returned 403."
+    },
+    {
+      "upc": "310119039540",
+      "retailer": "walgreens",
+      "reason": "Exa's page is the 12 oz 2-pack, not 2 oz; Walgreens search returned 403."
+    },
+    {
+      "upc": "324208276150",
+      "retailer": "target",
+      "reason": "Target page loaded but the price never rendered (marketplace seller listing)."
+    },
+    {
+      "upc": "310119035801",
+      "retailer": "target",
+      "reason": "Target page loaded but the price never rendered."
+    },
+    {
+      "upc": "324208521069",
+      "retailer": "target",
+      "reason": "Target page loaded but the price never rendered."
+    }
+  ]
+}
