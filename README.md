@@ -1,4 +1,4 @@
-# Grocery Price Tracker
+# Retail Price Tracker
 
 Tracks online prices for a fixed assortment of grocery SKUs across five retailers — Walmart, Target, Amazon, Walgreens, Kroger — using [Exa](https://exa.ai) search + contents APIs, with OpenAI for price extraction. Built for comparing Exa-based retrieval against browser-automation scrapers.
 
